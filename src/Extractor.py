@@ -63,14 +63,14 @@ def my_round(x):
 
 class Adams_Node:
     def __init__(self, dataframe,feature = None, threshold=None, parent = None, left=None, right=None, depth=0):
-        self.df = dataframe          # the data points in this Adams_Node 
-        self.feature = feature       # the feature this Adams_Node was slit from its parent Adams_Node on
-        self.threshold = threshold   # the threshold to split on (1 or 0)
-        self.parent = parent         # the parent of this Adams_Node. None for the root.
-        self.left = left             # the left child Adams_Node
-        self.right = right           # the right child Adams_Node
-        self.depth = depth           # the distance of the Adams_Node form the root
-        self.prediction = my_round(self.df['Poisonous'].mean()) # the prediction if a new data point ends in this Adams_Node
+        self.df = dataframe          
+        self.feature = feature       
+        self.threshold = threshold   
+        self.parent = parent         
+        self.left = left             
+        self.right = right           
+        self.depth = depth          
+        self.prediction = my_round(self.df['Poisonous'].mean()) 
 
 root = Adams_Node(mushDF)
 print('The prediction for the root node is: ',root.prediction)
@@ -89,24 +89,24 @@ def entropy_calculator(node):
 print('Entropy of the root node is: ',entropy_calculator(root))
 
 def split(node, column):
+    if column == None:
+        return
     df = node.df
     left_df = df[df[column] == 1]
     right_df = df[df[column] == 0]
+    if right_df.shape[0] == 0 or left_df.shape[0] == 0:
+        return
     left_node = Adams_Node(dataframe = left_df, threshold = 1, parent = node, depth = node.depth+1)
     right_node = Adams_Node(dataframe = right_df, threshold = 0, parent = node, depth = node.depth+1)
+    node.left = left_node
+    node.right = right_node
     return left_node, right_node
-
-
-left, right = split(root, 'Cap')
-print('left df is:')
-print(left.df)
-print('right df is:')
-print(right.df)
 
 
 def fetch_best_feature(node):
     if(node == None):
       return
+    best_feature = None
     df = node.df
     n_total = df.shape[0]
     curent_entropy = entropy_calculator(node)
@@ -117,10 +117,11 @@ def fetch_best_feature(node):
         #dont ever split on the response
         if column == 'Poisonous':
             continue
-        left_node, right_node = split(node, column)
+        split_result = split(node, column)
         # If you've already split on that feature skip
-        if left_node.df.empty or right_node.df.empty:
+        if split_result is None:
             continue
+        left_node, right_node = split_result
         n_yes = left_node.df.shape[0]
         n_no = right_node.df.shape[0]
         wL = n_yes/n_total
@@ -133,15 +134,46 @@ def fetch_best_feature(node):
     node.feature = best_feature
     return best_feature 
 
-best = fetch_best_feature(root)
-print(best)
 
-def train_tree(node, stopping_depth = 1):
-    if node == None or node.depth >= stopping_depth:
-      return
+def train_tree(node, stopping_depth=1):
+    if node.depth >= stopping_depth:
+        return
     feature = fetch_best_feature(node)
-    left_node, right_node = split(node, feature)
+    split_result = split(node, feature)
+    if split_result is None or feature == None:
+        return
+    left_node, right_node = split_result
     train_tree(left_node, stopping_depth)
     train_tree(right_node, stopping_depth)
-    return node 
+    return node
 
+
+other_root = Adams_Node(mushDF)
+tree = train_tree(other_root,2)
+
+def print_tree(node, indent=''):
+    if node == None:
+        return
+    if node.prediction == 0:
+        poison_status = 'Edible'
+    else:
+        poison_status = 'Poisenous'
+    print(indent + 'Depth:', node.depth, ', Feature:', node.feature, ', predictin:', poison_status)
+    if node.feature == None:
+        return
+    print(indent + 'yes:')
+    print_tree(node.left, indent + '  ')
+    print(indent + 'no:')
+    print_tree(node.right, indent + '  ')
+
+print_tree(tree)
+
+print(tree.right.left.df)
+
+def predict(Adams_Node, x, depth):
+    while Adams_Node.depth < depth:
+        if x[Adams_Node.feature] == Adams_Node.left.threshold:
+            Adams_Node = Adams_Node.left
+        else:
+            Adams_Node = Adams_Node.right
+    return Adams_Node.prediction
