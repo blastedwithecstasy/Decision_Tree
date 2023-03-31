@@ -1,4 +1,5 @@
 import math
+from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -61,7 +62,7 @@ def my_round(x):
     return round(x + EPSILON)
 
 
-class Adams_Node:
+class DT_Node:
     def __init__(self, dataframe,feature = None, threshold=None, parent = None, left=None, right=None, depth=0):
         self.df = dataframe          
         self.feature = feature       
@@ -72,7 +73,7 @@ class Adams_Node:
         self.depth = depth          
         self.prediction = my_round(self.df['Poisonous'].mean()) 
 
-root = Adams_Node(mushDF)
+root = DT_Node(mushDF)
 print('The prediction for the root node is: ',root.prediction)
 
 def entropy_calculator(node):
@@ -96,8 +97,8 @@ def split(node, column):
     right_df = df[df[column] == 0]
     if right_df.shape[0] == 0 or left_df.shape[0] == 0:
         return
-    left_node = Adams_Node(dataframe = left_df, threshold = 1, parent = node, depth = node.depth+1)
-    right_node = Adams_Node(dataframe = right_df, threshold = 0, parent = node, depth = node.depth+1)
+    left_node = DT_Node(dataframe = left_df, threshold = 1, parent = node, depth = node.depth+1)
+    right_node = DT_Node(dataframe = right_df, threshold = 0, parent = node, depth = node.depth+1)
     node.left = left_node
     node.right = right_node
     return left_node, right_node
@@ -148,7 +149,7 @@ def train_tree(node, stopping_depth=1):
     return node
 
 
-other_root = Adams_Node(mushDF)
+other_root = DT_Node(mushDF)
 tree = train_tree(other_root,2)
 
 def print_tree(node, indent=''):
@@ -170,10 +171,74 @@ print_tree(tree)
 
 print(tree.right.left.df)
 
-def predict(Adams_Node, x, depth):
-    while Adams_Node.depth < depth:
-        if x[Adams_Node.feature] == Adams_Node.left.threshold:
-            Adams_Node = Adams_Node.left
+
+def predict(node, x):
+    # If the feature that a node will be split on is 'None', then we are at a leaf node. 
+    # Threfore simply read off the prediction
+    if node.feature == None:
+        pred = node.prediction
+    else:
+        if x[node.feature] == 1:
+            pred = predict(node.left, x)
         else:
-            Adams_Node = Adams_Node.right
-    return Adams_Node.prediction
+            pred = predict(node.right, x)
+    return pred
+
+
+print('X:')
+x = mushDF.iloc[4]
+print(x)
+x_pred = predict(tree, x)
+print('Poisenous?')
+print(x_pred)
+
+
+def make_predictions(tree, X):
+    preds = []
+    for i in range(X.shape[0]):
+        x = X.iloc[i]
+        pred = predict(tree, x)
+        preds.append(pred)
+    preds = np.array(preds)
+    return preds
+
+
+def calculate_performance(df, y_pred):
+    y_true = df['Poisonous'].to_numpy()
+    vec = y_true - 2*y_pred
+    tp = np.count_nonzero(vec == -1) 
+    tn = np.count_nonzero(vec ==  0) 
+    fp = np.count_nonzero(vec == -2) 
+    fn = np.count_nonzero(vec ==  1) 
+    acc = (tp+tn)/(tp+tn+fp+fn)
+    prec = tp/(tp+fp)
+    rec = tp/(tp+fn)
+    return acc, prec, rec 
+
+pred = make_predictions(tree, mushDF)
+Accuracy, Percision, Recall  = calculate_performance(mushDF, pred)
+print('The Accuracy of the model on this dataset is : ', Accuracy)
+print('The percision of the model on this dataset is :', Percision)
+print('The Recal of the model on this dataset is :', Recall)
+
+
+## will have to make the n-fold cross validation code and debug.
+## will have to make the roc_curve, debug and plot.
+
+def roc_curve(y_true, y_pred, num_thresholds=100):
+    thresholds = np.linspace(0, 1, num_thresholds)
+    tprs = []
+    fprs = []
+
+    for threshold in thresholds:
+        tpr, fpr = calculate_rates(y_true, y_pred, threshold)
+        tprs.append(tpr)
+        fprs.append(fpr)
+    
+    plt.plot(fprs, tprs)
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Curve')
+    plt.show()
+
+
