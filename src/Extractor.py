@@ -17,24 +17,23 @@ def oneHotEncoder(df):
         numUniqueVelue = df[column].nunique()
         if numUniqueVelue > 2:
             columnsToEncode.append(column)
-    ## get_dummies() one-hot encodes the relavent columns
+    # Get_dummies() one-hot encodes the relavent columns
     df = pd.get_dummies(df, columns= columnsToEncode)
     return df
 
 mushDF = oneHotEncoder(mushDF)
 print(mushDF)
 
-## Replaces the letters with '1's and '0's
 def replaceWithBinary(df):
     for col in df.columns:
         uniqueVals = df[col].unique()
+        # If this column is already a binary column, move on
         if set(uniqueVals) == set([0, 1]):
-            # If both 1 and 0 are present, leave the column unchanged
             continue
+        # If there are more than two unique values, skip the column
         if len(uniqueVals) != 2:
-            # If there are more than two unique values, skip the column
             continue
-        ## Create a dictionary mapping that maps the max letter to 1 and the min letter to 0
+        # Create a dictionary mapping that maps the "max" letter to 1 and the "min" letter to 0
         mappingDict = {max(uniqueVals): 1, min(uniqueVals): 0}
         df[col] = df[col].replace(mappingDict)
     return df
@@ -47,31 +46,45 @@ print(mushDF)
 mushDF = mushDF.drop('Fake', axis=1)
 print(mushDF)
 
+
+# Creating training and testing sets
 np.random.seed(0)
-indices = np.random.permutation(mushDF.shape[0])
-split_idx = int(0.8 * len(indices))
-traning_mush_df = mushDF.iloc[indices[:split_idx]]
-testing_mush_df = mushDF.iloc[indices[split_idx:]]
+randomized_row_nums = np.random.permutation(mushDF.shape[0])
+# Training set will contain 80% of the data
+split_idx = int(0.8 * len(randomized_row_nums))
+traning_mush_df = mushDF.iloc[randomized_row_nums[:split_idx]]
+testing_mush_df = mushDF.iloc[randomized_row_nums[split_idx:]]
 
 print(traning_mush_df)
 print(testing_mush_df)
 
-
+# So that 0.5 is rounded to 1, instead of the closest even integer
 def my_round(x):
     EPSILON = 1e-9  
     return round(x + EPSILON)
 
-
+# This data type will represents the nodes in the tree 
 class DT_Node:
     def __init__(self, dataframe,feature = None, threshold=None, parent = None, left=None, right=None, depth=0):
+        # The dataframe are all the mushrooms that fall under this node
         self.df = dataframe          
+        # This is the best feature of this node. The feature that we will split the node on
         self.feature = feature       
-        self.threshold = threshold   
+        # When a parent node is split, all mushrooms with a 1 for that feature go to the child node
+        # where threshold = 1 and all the mushrooms with a 0 for that feature go to the child node
+        # with threshold = 0.
+        self.threshold = threshold  # Note that the root node will not have a threshold because no parent 
+        # The parent of this node. Empty for root node.
         self.parent = parent         
+        # The left node. Will be empty for leaf nodes
         self.left = left             
+        # The right node. Will be empty for leaf nodes
         self.right = right           
+        # The depth of this node in the tree.
         self.depth = depth          
+        # The proportion of mushrooms in the dataframe of this node that are poisonous
         self.probability = self.df['Poisonous'].mean()
+        # If a new mushroom ends up in this node, this will determine the class lable given
         self.prediction = my_round(self.probability) 
 
 root = DT_Node(mushDF)
@@ -91,11 +104,13 @@ def entropy_calculator(node):
 print('Entropy of the root node is: ',entropy_calculator(root))
 
 def split(node, column):
+    # Column is None when there is no best feature to split on. 
     if column == None:
         return
     df = node.df
     left_df = df[df[column] == 1]
     right_df = df[df[column] == 0]
+    # If you've already split on this feature, just return
     if right_df.shape[0] == 0 or left_df.shape[0] == 0:
         return
     left_node = DT_Node(dataframe = left_df, threshold = 1, parent = node, depth = node.depth+1)
@@ -169,10 +184,10 @@ def print_tree(node, indent=''):
     print_tree(node.right, indent + '  ')
 
 print_tree(tree)
-
 print(tree.right.left.df)
 
 
+# Tell me if this mushroom is poisonous or not
 def predict(node, x):
     # If the feature that a node will be split on is 'None', then we are at a leaf node. 
     # Threfore simply read off the prediction
@@ -186,7 +201,6 @@ def predict(node, x):
     return pred
 
 
-
 print('X:')
 x = mushDF.iloc[4]
 print(x)
@@ -196,6 +210,7 @@ print(x_pred)
 
 
 
+# Tell me if these mushrooms are poisonous or not
 def make_predictions(tree, df):
     preds = []
     for i in range(df.shape[0]):
@@ -205,6 +220,7 @@ def make_predictions(tree, df):
     preds = np.array(preds)
     return preds
 
+# Will be used to calculate evaluation measures and make ROC 
 def calculate_scores(y, y_hat):
     vec = y - 2*y_hat
     tp = np.count_nonzero(vec == -1) 
@@ -214,6 +230,7 @@ def calculate_scores(y, y_hat):
     return tp, tn, fp, fn
 
 
+# Calculates accuracy, percision and recal from scores
 def calculate_performance(df, y_hat):
     y_true = df['Poisonous'].to_numpy()
     tp, tn, fp, fn = calculate_scores(y_true, y_hat)
@@ -230,10 +247,9 @@ print('The Recal of the model on this dataset is :', Recall)
 
 
 ## will have to make the n-fold cross validation code and debug.
-## will have to make the roc_curve, debug and plot.
 
 
-#Probability that this mushroom is poisenous. 
+# Probability that this mushroom is poisenous. 
 def give_prob(node, x):
     # If the feature that a node will be split on is 'None', then we are at a leaf node. 
     # Threfore simply read off the probability 
@@ -247,6 +263,7 @@ def give_prob(node, x):
     return prob 
 
 
+# Probabilities of these mushrooms being poisonous
 def give_probabilities(tree, df):
     probs = []
     for i in range(df.shape[0]):
@@ -257,6 +274,7 @@ def give_probabilities(tree, df):
     return probs 
 
 
+# Calculate TPR and FPR
 def calculate_rates(df, p_hat, threshold):
     #If the value is higher than the threshold, mark it as a positive, i.e. poisonous. 
     #Else mark it as 0 i.e. eddible. 
@@ -268,9 +286,8 @@ def calculate_rates(df, p_hat, threshold):
     return tpr, fpr
 
 
-
-
-def roc_curve(df, p_hat, num_thresholds=100):
+# Draw me a ROC curve
+def draw_roc_curve(df, p_hat, num_thresholds=100):
     thresholds = np.linspace(0, 1, num_thresholds)
     tprs = []
     fprs = []
@@ -290,7 +307,7 @@ def roc_curve(df, p_hat, num_thresholds=100):
 p_pred = give_probabilities(tree, mushDF)
 print("p_preds are:")
 print(p_pred)
-tprs, fprs = roc_curve(mushDF, p_pred)
+tprs, fprs = draw_roc_curve(mushDF, p_pred)
 print("TPRs:")
 print(tprs)
 print("FPRs:")
