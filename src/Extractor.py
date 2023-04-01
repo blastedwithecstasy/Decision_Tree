@@ -71,7 +71,8 @@ class DT_Node:
         self.left = left             
         self.right = right           
         self.depth = depth          
-        self.prediction = my_round(self.df['Poisonous'].mean()) 
+        self.probability = self.df['Poisonous'].mean()
+        self.prediction = my_round(self.probability) 
 
 root = DT_Node(mushDF)
 print('The prediction for the root node is: ',root.prediction)
@@ -185,6 +186,7 @@ def predict(node, x):
     return pred
 
 
+
 print('X:')
 x = mushDF.iloc[4]
 print(x)
@@ -193,23 +195,28 @@ print('Poisenous?')
 print(x_pred)
 
 
-def make_predictions(tree, X):
+
+def make_predictions(tree, df):
     preds = []
-    for i in range(X.shape[0]):
-        x = X.iloc[i]
+    for i in range(df.shape[0]):
+        x = df.iloc[i]
         pred = predict(tree, x)
         preds.append(pred)
     preds = np.array(preds)
     return preds
 
-
-def calculate_performance(df, y_pred):
-    y_true = df['Poisonous'].to_numpy()
-    vec = y_true - 2*y_pred
+def calculate_scores(y, y_hat):
+    vec = y - 2*y_hat
     tp = np.count_nonzero(vec == -1) 
     tn = np.count_nonzero(vec ==  0) 
     fp = np.count_nonzero(vec == -2) 
     fn = np.count_nonzero(vec ==  1) 
+    return tp, tn, fp, fn
+
+
+def calculate_performance(df, y_hat):
+    y_true = df['Poisonous'].to_numpy()
+    tp, tn, fp, fn = calculate_scores(y_true, y_hat)
     acc = (tp+tn)/(tp+tn+fp+fn)
     prec = tp/(tp+fp)
     rec = tp/(tp+fn)
@@ -225,20 +232,69 @@ print('The Recal of the model on this dataset is :', Recall)
 ## will have to make the n-fold cross validation code and debug.
 ## will have to make the roc_curve, debug and plot.
 
-def roc_curve(y_true, y_pred, num_thresholds=100):
+
+#Probability that this mushroom is poisenous. 
+def give_prob(node, x):
+    # If the feature that a node will be split on is 'None', then we are at a leaf node. 
+    # Threfore simply read off the probability 
+    if node.feature == None:
+        prob = node.probability
+    else:
+        if x[node.feature] == 1:
+            prob = give_prob(node.left, x)
+        else:
+            prob = give_prob(node.right, x)
+    return prob 
+
+
+def give_probabilities(tree, df):
+    probs = []
+    for i in range(df.shape[0]):
+        x = df.iloc[i]
+        prob = give_prob(tree, x)
+        probs.append(prob)
+    probs = np.array(probs)
+    return probs 
+
+
+def calculate_rates(df, p_hat, threshold):
+    #If the value is higher than the threshold, mark it as a positive, i.e. poisonous. 
+    #Else mark it as 0 i.e. eddible. 
+    new_p_hat = np.where(p_hat > threshold, 1, 0)
+    y_true = df['Poisonous'].astype(int).to_numpy()
+    tp, tn, fp, fn = calculate_scores(y_true, new_p_hat)
+    tpr = tp / (tp + fn)
+    fpr = fp / (fp + tn)
+    return tpr, fpr
+
+
+
+
+def roc_curve(df, p_hat, num_thresholds=100):
     thresholds = np.linspace(0, 1, num_thresholds)
     tprs = []
     fprs = []
-
     for threshold in thresholds:
-        tpr, fpr = calculate_rates(y_true, y_pred, threshold)
+        tpr, fpr = calculate_rates(df, p_hat, threshold)
         tprs.append(tpr)
         fprs.append(fpr)
-    
+
     plt.plot(fprs, tprs)
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
     plt.title('ROC Curve')
     plt.show()
+    return tprs, fprs
+
+
+p_pred = give_probabilities(tree, mushDF)
+print("p_preds are:")
+print(p_pred)
+tprs, fprs = roc_curve(mushDF, p_pred)
+print("TPRs:")
+print(tprs)
+print("FPRs:")
+print(fprs)
+
 
 
