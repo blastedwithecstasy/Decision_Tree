@@ -175,16 +175,15 @@ def print_tree(node, indent=''):
         poison_status = 'Edible'
     else:
         poison_status = 'Poisenous'
-    print(indent + 'Depth:', node.depth, ', Feature:', node.feature, ', predictin:', poison_status)
+    print(indent + 'Depth:', node.depth, ', predictin:', poison_status)
     if node.feature == None:
         return
-    print(indent + 'yes:')
+    print(indent + node.feature, 'yes:')
     print_tree(node.left, indent + '  ')
-    print(indent + 'no:')
+    print(indent + node.feature, 'no:')
     print_tree(node.right, indent + '  ')
 
 print_tree(tree)
-print(tree.right.left.df)
 
 
 # Tell me if this mushroom is poisonous or not
@@ -237,13 +236,15 @@ def calculate_performance(df, y_hat):
     acc = (tp+tn)/(tp+tn+fp+fn)
     prec = tp/(tp+fp)
     rec = tp/(tp+fn)
-    return acc, prec, rec 
+    f1Score = (2*prec*rec)/(prec+rec)
+    return acc, prec, rec, f1Score 
 
 pred = make_predictions(tree, mushDF)
-Accuracy, Percision, Recall  = calculate_performance(mushDF, pred)
+Accuracy, Percision, Recall,f1_score  = calculate_performance(mushDF, pred)
 print('The Accuracy of the model on this dataset is : ', Accuracy)
 print('The percision of the model on this dataset is :', Percision)
 print('The Recal of the model on this dataset is :', Recall)
+print('The F - Score of the model on this dataset is :', f1_score)
 
 
 ## will have to make the n-fold cross validation code and debug.
@@ -297,10 +298,11 @@ def draw_roc_curve(df, p_hat, num_thresholds=100):
         fprs.append(fpr)
 
     plt.plot(fprs, tprs)
+    plt.title('ROC Curve for training set')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curve')
     plt.show()
+    # For debugging
     return tprs, fprs
 
 
